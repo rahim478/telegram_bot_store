@@ -1,0 +1,35 @@
+{
+  "Unlock tool": {
+    "6h": "6",
+    "8h": "7",
+    "12h": "9",
+    "24h": "12"
+  },
+  "Android Multi Tool AMT": {
+    "2h (without credits)": "6",
+    "1 credit": "1.5",
+    "2h + 5 credits": "12"
+  },
+  "TSM TOOL": {
+    "6h": "5",
+    "12h": "8",
+    "24h": "12"
+  },
+  "Cheetah Pro Tool": {
+    "4h": "5",
+    "8h": "8",
+    "12h": "12"
+  },
+  "TFM Tool Pro": {
+    "6h": "5",
+    "12h": "8",
+    "24h": "12",
+    "1 credit": "1.5",
+    "24h + 5 credits": "16"
+  },
+  "DFT Pro Tool": {
+    "48h": "9",
+    "4day": "14",
+    "6day": "16"
+  }
+}
