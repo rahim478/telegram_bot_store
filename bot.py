@@ -1,6 +1,9 @@
 import json
 import os
-from aiogram import Bot, Dispatcher, executor, types
+import asyncio
+from aiogram import Bot, Dispatcher, types, executor
+from flask import Flask
+import threading
 
 # Import config
 import config
@@ -85,5 +88,22 @@ async def handle_paid(callback: types.CallbackQuery):
     await callback.message.answer("✅ Thank you! Your payment will be verified.")
     await callback.answer()
 
+# ==========================
+# Flask dummy port for Render
+# ==========================
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))  # Render sets PORT automatically
+    app.run(host="0.0.0.0", port=port)
+
+# ==========================
+# Run bot and Flask together
+# ==========================
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+    threading.Thread(target=run_flask).start()
+    asyncio.run(executor.start_polling(dp, skip_updates=True))
