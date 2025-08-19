@@ -211,7 +211,6 @@ async def process_product_details(message: types.Message, state: FSMContext):
 
 # ================== TICKETS SYSTEM ==================
 def load_tickets():
-    """Load tickets safely"""
     if not os.path.exists("tickets.json"):
         with open("tickets.json", "w") as f:
             json.dump({}, f)
@@ -227,7 +226,6 @@ def load_tickets():
 
 
 def save_tickets(tickets):
-    """Save tickets safely"""
     with open("tickets.json", "w") as f:
         json.dump(tickets, f, indent=2)
 
@@ -240,7 +238,7 @@ async def report_problem(message: types.Message):
     if user_id in tickets and tickets[user_id].get("open", False):
         await message.answer("⚠️ You already have an open ticket. Please describe your problem:")
     else:
-        tickets[user_id] = {"open": True, "reply_to": None, "messages": []}
+        tickets[user_id] = {"open": True, "messages": []}
         save_tickets(tickets)
         await message.answer("✍️ Please describe your problem with the product:")
 
@@ -250,7 +248,7 @@ async def handle_messages(message: types.Message):
     tickets = load_tickets()
     user_id = str(message.from_user.id)
 
-    # If client has open ticket
+    # إذا كانت هناك تذكرة مفتوحة من المستخدم
     if user_id in tickets and tickets[user_id].get("open", False) and message.from_user.id != config.ADMIN_ID:
         tickets[user_id]["messages"].append({"from": "user", "text": message.text})
         save_tickets(tickets)
@@ -258,13 +256,15 @@ async def handle_messages(message: types.Message):
             config.ADMIN_ID,
             f"📩 Message from {message.from_user.username} (ID: {message.from_user.id}):\n\n{message.text}",
             reply_markup=types.InlineKeyboardMarkup().add(
-                types.InlineKeyboardButton("Reply", callback_data=f"reply:{user_id}")).add(
+                types.InlineKeyboardButton("Reply", callback_data=f"reply:{user_id}")
+            ).add(
                 types.InlineKeyboardButton("❌ Close Ticket", callback_data=f"close:{user_id}")
             )
         )
+        await message.answer("✅ Your message has been sent to the admin.")
         return
 
-    # If admin is replying to a ticket
+    # إذا كان الأدمن يرد على التذكرة
     if message.from_user.id == config.ADMIN_ID:
         for uid, data in tickets.items():
             if data.get("open", False) and data.get("reply_to") == "waiting":
