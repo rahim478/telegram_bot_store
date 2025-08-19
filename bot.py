@@ -248,12 +248,25 @@ async def handle_messages(message: types.Message):
     # If admin is replying to a ticket
     if message.from_user.id == config.ADMIN_ID:
         for uid, data in tickets.items():
-            if data["open"]:
+            if data["open"] and "reply_to" in data and data["reply_to"] == "waiting":
                 await bot.send_message(int(uid), f"💬 Admin: {message.text}",
                                        reply_markup=types.InlineKeyboardMarkup().add(
                                            types.InlineKeyboardButton("❌ Close Ticket", callback_data=f"close:{uid}")
                                        ))
+                tickets[uid]["reply_to"] = None
+                save_tickets(tickets)
                 break
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith("reply:"))
+async def reply_ticket(callback: types.CallbackQuery):
+    _, user_id = callback.data.split(":")
+    tickets = load_tickets()
+    if user_id in tickets and tickets[user_id]["open"]:
+        tickets[user_id]["reply_to"] = "waiting"
+        save_tickets(tickets)
+        await callback.message.answer(f"✍️ Please type your reply to user {user_id}:")
+    await callback.answer()
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("close:"))
