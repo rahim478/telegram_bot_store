@@ -119,8 +119,15 @@ async def on_startup(app):
 async def on_shutdown(app):
     await bot.delete_webhook()
 
+# دالة async لمعالجة التحديثات
+async def handle_webhook(request):
+    data = await request.json()
+    update = types.Update(**data)
+    await dp.process_update(update)
+    return web.Response(text="OK")
+
 app = web.Application()
-app.router.add_post(WEBHOOK_PATH, lambda request: dp.process_update(types.Update(**await request.json())) or web.Response(text="OK"))
+app.router.add_post(WEBHOOK_PATH, handle_webhook)
 
 if __name__ == "__main__":
     web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
