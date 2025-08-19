@@ -101,6 +101,26 @@ async def handle_buy(callback: types.CallbackQuery):
     )
     await callback.answer()
 
+# ==========================
+# Handle reject payment
+# ==========================
+@dp.callback_query_handler(lambda c: c.data.startswith("reject:") and c.from_user.id == config.ADMIN_ID)
+async def reject_payment(callback: types.CallbackQuery):
+    _, user_id, product, option, price = callback.data.split(":")
+    user_id = int(user_id)
+
+    # إشعار الأدمن
+    await callback.message.answer(f"❌ Payment for user {user_id} has been rejected.")
+
+    # إخطار المستخدم
+    await bot.send_message(
+        user_id,
+        f"⚠️ Your payment for {product} ({option}) - ${price} has not been confirmed.\n"
+        f"Please use the ⚠️ Report a Problem button to contact the admin for review."
+    )
+
+    await callback.answer()
+
 
 # ==========================
 # Handle payment confirmation
