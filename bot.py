@@ -78,11 +78,13 @@ async def handle_buy(callback: types.CallbackQuery):
         "status": "pending"
     }
 
-    # Save order
-    with open("orders.json", "r+") as f:
+    # Save order safely
+    with open("orders.json", "r") as f:
         orders = json.load(f)
-        orders.append(order)
-        f.seek(0)
+
+    orders.append(order)
+
+    with open("orders.json", "w") as f:
         json.dump(orders, f, indent=2)
 
     # Send payment info
@@ -163,12 +165,14 @@ async def confirm_payment(callback: types.CallbackQuery, state: FSMContext):
     user_id = int(user_id)
 
     # Save order as paid
-    with open("orders.json", "r+") as f:
+    with open("orders.json", "r") as f:
         orders = json.load(f)
-        for order in orders:
-            if order["user_id"] == user_id and order["product"] == product and order["option"] == option:
-                order["status"] = "paid"
-        f.seek(0)
+
+    for order in orders:
+        if order["user_id"] == user_id and order["product"] == product and order["option"] == option:
+            order["status"] = "paid"
+
+    with open("orders.json", "w") as f:
         json.dump(orders, f, indent=2)
 
     # Ask admin to send product
@@ -207,10 +211,23 @@ async def process_product_details(message: types.Message, state: FSMContext):
 
 # ================== TICKETS SYSTEM ==================
 def load_tickets():
-    with open("tickets.json", "r") as f:
-        return json.load(f)
+    """Load tickets safely"""
+    if not os.path.exists("tickets.json"):
+        with open("tickets.json", "w") as f:
+            json.dump({}, f)
+        return {}
+
+    try:
+        with open("tickets.json", "r") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        with open("tickets.json", "w") as f:
+            json.dump({}, f)
+        return {}
+
 
 def save_tickets(tickets):
+    """Save tickets safely"""
     with open("tickets.json", "w") as f:
         json.dump(tickets, f, indent=2)
 
@@ -220,10 +237,10 @@ async def report_problem(message: types.Message):
     tickets = load_tickets()
     user_id = str(message.from_user.id)
 
-    if user_id in tickets and tickets[user_id]["open"]:
+    if user_id in tickets and tickets[user_id].get("open", False):
         await message.answer("⚠️ You already have an open ticket. Please describe your problem:")
     else:
-        tickets[user_id] = {"open": True}
+        tickets[user_id] = {"open": True, "reply_to": None, "messages": []}
         save_tickets(tickets)
         await message.answer("✍️ Please describe your problem with the product:")
 
@@ -234,7 +251,9 @@ async def handle_messages(message: types.Message):
     user_id = str(message.from_user.id)
 
     # If client has open ticket
-    if user_id in tickets and tickets[user_id]["open"] and message.from_user.id != config.ADMIN_ID:
+    if user_id in tickets and tickets[user_id].get("open", False) and message.from_user.id != config.ADMIN_ID:
+        tickets[user_id]["messages"].append({"from": "user", "text": message.text})
+        save_tickets(tickets)
         await bot.send_message(
             config.ADMIN_ID,
             f"📩 Message from {message.from_user.username} (ID: {message.from_user.id}):\n\n{message.text}",
@@ -248,7 +267,8 @@ async def handle_messages(message: types.Message):
     # If admin is replying to a ticket
     if message.from_user.id == config.ADMIN_ID:
         for uid, data in tickets.items():
-            if data["open"] and "reply_to" in data and data["reply_to"] == "waiting":
+            if data.get("open", False) and data.get("reply_to") == "waiting":
+                tickets[uid]["messages"].append({"from": "admin", "text": message.text})
                 await bot.send_message(int(uid), f"💬 Admin: {message.text}",
                                        reply_markup=types.InlineKeyboardMarkup().add(
                                            types.InlineKeyboardButton("❌ Close Ticket", callback_data=f"close:{uid}")
@@ -262,7 +282,7 @@ async def handle_messages(message: types.Message):
 async def reply_ticket(callback: types.CallbackQuery):
     _, user_id = callback.data.split(":")
     tickets = load_tickets()
-    if user_id in tickets and tickets[user_id]["open"]:
+    if user_id in tickets and tickets[user_id].get("open", False):
         tickets[user_id]["reply_to"] = "waiting"
         save_tickets(tickets)
         await callback.message.answer(f"✍️ Please type your reply to user {user_id}:")
@@ -275,6 +295,7 @@ async def close_ticket(callback: types.CallbackQuery):
     tickets = load_tickets()
     if user_id in tickets:
         tickets[user_id]["open"] = False
+        tickets[user_id]["reply_to"] = None
         save_tickets(tickets)
         await bot.send_message(int(user_id), "✅ Your ticket has been closed.")
         await callback.message.answer("✅ Ticket closed.")
@@ -293,6 +314,7 @@ def home():
 def run_flask():
     port = int(os.environ.get("PORT", 5000))  # Render sets PORT automatically
     app.run(host="0.0.0.0", port=port)
+
 
 # -------------------------
 # Run bot and Flask together
