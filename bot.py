@@ -235,12 +235,12 @@ async def report_problem(message: types.Message):
     tickets = load_tickets()
     user_id = str(message.from_user.id)
 
-    if user_id in tickets and tickets[user_id].get("open", False):
-        await message.answer("⚠️ You already have an open ticket. Please describe your problem:")
-    else:
+    if user_id not in tickets:
+        # إنشاء تذكرة جديدة
         tickets[user_id] = {"open": True, "messages": []}
         save_tickets(tickets)
-        await message.answer("✍️ Please describe your problem with the product:")
+
+    await message.answer("✍️ Please describe your problem with the product:")
 
 
 @dp.message_handler(lambda msg: True)
@@ -248,13 +248,16 @@ async def handle_messages(message: types.Message):
     tickets = load_tickets()
     user_id = str(message.from_user.id)
 
-    # إذا كانت هناك تذكرة مفتوحة من المستخدم
+    # إذا كان المستخدم ليس الأدمن ولديه تذكرة مفتوحة
     if user_id in tickets and tickets[user_id].get("open", False) and message.from_user.id != config.ADMIN_ID:
+        # حفظ الرسالة
         tickets[user_id]["messages"].append({"from": "user", "text": message.text})
         save_tickets(tickets)
+
+        # إرسال الرسالة للأدمن
         await bot.send_message(
             config.ADMIN_ID,
-            f"📩 Message from {message.from_user.username} (ID: {message.from_user.id}):\n\n{message.text}",
+            f"📩 Message from {message.from_user.full_name} (@{message.from_user.username}) (ID: {message.from_user.id}):\n\n{message.text}",
             reply_markup=types.InlineKeyboardMarkup().add(
                 types.InlineKeyboardButton("Reply", callback_data=f"reply:{user_id}")
             ).add(
@@ -276,6 +279,7 @@ async def handle_messages(message: types.Message):
                 tickets[uid]["reply_to"] = None
                 save_tickets(tickets)
                 break
+
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("reply:"))
