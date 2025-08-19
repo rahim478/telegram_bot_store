@@ -1,14 +1,12 @@
 import json
 import os
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ParseMode
-import asyncio
 
 # Import config
-import config  # يحتوي على TOKEN, ADMIN_ID, BINANCE_ID
+import config
 
 # Initialize bot
-bot = Bot(token=config.TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=config.TOKEN)
 dp = Dispatcher(bot)
 
 # Load products
@@ -18,7 +16,11 @@ with open("products.json", "r") as f:
 # Ensure orders.json exists
 if not os.path.exists("orders.json"):
     with open("orders.json", "w") as f:
-        json.dump([], f, indent=2)
+        json.dump([], f)
+
+# Dummy port for Render free tier
+PORT = int(os.environ.get("PORT", 8000))
+print(f"Using port {PORT} (dummy, no actual server)")
 
 # Start command
 @dp.message_handler(commands=['start'])
@@ -28,7 +30,7 @@ async def start(message: types.Message):
         keyboard.add(product)
     await message.answer("🛒 Welcome! Please choose a product:", reply_markup=keyboard)
 
-# Show products
+# Handle product selection
 @dp.message_handler(lambda msg: msg.text in products.keys())
 async def product_selected(message: types.Message):
     product = message.text
@@ -46,7 +48,8 @@ async def handle_buy(callback: types.CallbackQuery):
     _, product, option, price = callback.data.split(":")
     order = {
         "user_id": callback.from_user.id,
-        "username": callback.from_user.username,
+        "username": callback.from_user.username or "None",
+        "mention": f"@{callback.from_user.username}" if callback.from_user.username else "None",
         "product": product,
         "option": option,
         "price": price,
@@ -60,17 +63,16 @@ async def handle_buy(callback: types.CallbackQuery):
         f.seek(0)
         json.dump(orders, f, indent=2)
 
-    # Payment and cancel buttons
+    # Send payment info
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(types.InlineKeyboardButton(
         text="✅ I have paid",
         callback_data=f"paid:{callback.from_user.id}:{product}:{option}:{price}"
     ))
     keyboard.add(types.InlineKeyboardButton(
-        text="❌ Cancel order",
+        text="❌ Cancel Order",
         callback_data=f"cancel:{callback.from_user.id}:{product}:{option}:{price}"
     ))
-
     await callback.message.answer(
         f"🛒 Order placed!\n\n"
         f"📦 Product: {product} ({option}) - ${price}\n"
@@ -83,79 +85,33 @@ async def handle_buy(callback: types.CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data.startswith("paid:"))
 async def handle_paid(callback: types.CallbackQuery):
     _, user_id, product, option, price = callback.data.split(":")
-    user_id = int(user_id)
-
-    # Update order status
-    with open("orders.json", "r+") as f:
-        orders = json.load(f)
-        for o in orders:
-            if o["user_id"] == user_id and o["product"] == product and o["option"] == option:
-                o["status"] = "paid"
-        f.seek(0)
-        f.truncate()
-        json.dump(orders, f, indent=2)
-
-    # Notify admin
     await bot.send_message(
         config.ADMIN_ID,
         f"⚠️ Payment confirmation received!\n\n"
-        f"User: @{callback.from_user.username} ({callback.from_user.full_name})\n"
         f"User ID: {user_id}\n"
+        f"Username: @{callback.from_user.username}\n"
         f"Product: {product} ({option}) - ${price}"
     )
     await callback.message.answer("✅ Thank you! Your payment will be verified.")
     await callback.answer()
 
-# Handle cancel order
+# Handle order cancellation
 @dp.callback_query_handler(lambda c: c.data.startswith("cancel:"))
 async def handle_cancel(callback: types.CallbackQuery):
     _, user_id, product, option, price = callback.data.split(":")
-    user_id = int(user_id)
-
-    # Remove order
+    # Update orders.json
     with open("orders.json", "r+") as f:
         orders = json.load(f)
-        orders = [o for o in orders if not (o["user_id"] == user_id and o["product"] == product and o["option"] == option)]
+        for order in orders:
+            if str(order["user_id"]) == user_id and order["product"] == product and order["option"] == option and order["price"] == price and order["status"] == "pending":
+                order["status"] = "cancelled"
+                break
         f.seek(0)
         f.truncate()
         json.dump(orders, f, indent=2)
-
     await callback.message.answer("❌ Your order has been cancelled.")
     await callback.answer()
 
-# Optional: show orders for admin
-@dp.message_handler(commands=['orders'])
-async def show_orders(message: types.Message):
-    if message.from_user.id != config.ADMIN_ID:
-        await message.reply("🚫 You are not authorized to view orders.")
-        return
-    with open("orders.json", "r") as f:
-        orders = json.load(f)
-    if not orders:
-        await message.reply("📂 No orders yet.")
-        return
-    text = "📂 Orders:\n\n"
-    for o in orders:
-        text += f"User: @{o['username']} ({o['user_id']})\nProduct: {o['product']} ({o['option']}) - ${o['price']}\nStatus: {o['status']}\n\n"
-    await message.reply(text)
-
-# Optional: auto cancel unpaid orders after a timeout (e.g., 1 hour)
-async def auto_cancel_unpaid():
-    while True:
-        await asyncio.sleep(3600)  # check every 1 hour
-        with open("orders.json", "r+") as f:
-            orders = json.load(f)
-            changed = False
-            for o in orders:
-                if o["status"] == "pending":
-                    o["status"] = "cancelled"
-                    changed = True
-            if changed:
-                f.seek(0)
-                f.truncate()
-                json.dump(orders, f, indent=2)
-
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(auto_cancel_unpaid())
+    # Start polling (works with Render free tier)
     executor.start_polling(dp, skip_updates=True)
