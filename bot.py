@@ -1,5 +1,8 @@
 import json
 import os
+import threading
+import asyncio
+from flask import Flask
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher import FSMContext
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -22,16 +25,15 @@ if not os.path.exists("orders.json"):
     with open("orders.json", "w") as f:
         json.dump([], f)
 
+# Ensure tickets.json exists
+if not os.path.exists("tickets.json"):
+    with open("tickets.json", "w") as f:
+        json.dump({}, f)
+
 
 # ================= STATES =================
 class SendProductState(StatesGroup):
     waiting_for_details = State()
-
-class ReportProblemState(StatesGroup):
-    waiting_for_report = State()
-
-class ReplyProblemState(StatesGroup):
-    waiting_for_reply = State()
 
 
 # ================= START =================
@@ -98,23 +100,35 @@ async def handle_buy(callback: types.CallbackQuery):
     await callback.answer()
 
 
+# ==========================
 # Handle payment confirmation
+# ==========================
 @dp.callback_query_handler(lambda c: c.data.startswith("paid:"))
 async def handle_paid(callback: types.CallbackQuery):
     _, user_id, product, option, price = callback.data.split(":")
+    user_mention = f"@{callback.from_user.username}" if callback.from_user.username else "No username"
+
+    # إشعار الأدمن مع أزرار تأكيد / رفض
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(types.InlineKeyboardButton(
+        text="✅ Confirm Payment",
+        callback_data=f"confirm:{user_id}:{product}:{option}:{price}"
+    ))
+    keyboard.add(types.InlineKeyboardButton(
+        text="❌ Reject Payment",
+        callback_data=f"reject:{user_id}:{product}:{option}:{price}"
+    ))
+
     await bot.send_message(
         config.ADMIN_ID,
         f"⚠️ Payment confirmation received!\n\n"
         f"User ID: {user_id}\n"
+        f"Name: {callback.from_user.full_name}\n"
+        f"Telegram: {user_mention}\n"
         f"Product: {product} ({option}) - ${price}",
-        reply_markup=types.InlineKeyboardMarkup().add(
-            types.InlineKeyboardButton(
-                text="✅ Confirm Payment",
-                callback_data=f"confirm:{user_id}:{product}:{option}:{price}"
-            )
-        )
+        reply_markup=keyboard
     )
-    await callback.message.answer("✅ Thank you! Your payment will be verified.")
+    await callback.message.answer("✅ Thank you! Your payment will be verified by admin.")
     await callback.answer()
 
 
@@ -191,53 +205,85 @@ async def process_product_details(message: types.Message, state: FSMContext):
     await state.finish()
 
 
-# ================= REPORT PROBLEM (CLIENT) =================
+# ================== TICKETS SYSTEM ==================
+def load_tickets():
+    with open("tickets.json", "r") as f:
+        return json.load(f)
+
+def save_tickets(tickets):
+    with open("tickets.json", "w") as f:
+        json.dump(tickets, f, indent=2)
+
+
 @dp.message_handler(lambda msg: msg.text == "⚠️ Report a Problem")
-async def report_problem(message: types.Message, state: FSMContext):
-    await message.answer("✍️ Please describe the problem with your product:")
-    await ReportProblemState.waiting_for_report.set()
+async def report_problem(message: types.Message):
+    tickets = load_tickets()
+    user_id = str(message.from_user.id)
+
+    if user_id in tickets and tickets[user_id]["open"]:
+        await message.answer("⚠️ You already have an open ticket. Please describe your problem:")
+    else:
+        tickets[user_id] = {"open": True}
+        save_tickets(tickets)
+        await message.answer("✍️ Please describe your problem with the product:")
 
 
-@dp.message_handler(state=ReportProblemState.waiting_for_report, content_types=types.ContentTypes.TEXT)
-async def process_report_problem(message: types.Message, state: FSMContext):
-    report_text = message.text
-    await bot.send_message(
-        config.ADMIN_ID,
-        f"⚠️ Problem Report Received!\n\n"
-        f"👤 User: {message.from_user.username} (ID: {message.from_user.id})\n"
-        f"📝 Report: {report_text}",
-        reply_markup=types.InlineKeyboardMarkup().add(
-            types.InlineKeyboardButton(
-                text="💬 Reply",
-                callback_data=f"reply:{message.from_user.id}"
+@dp.message_handler(lambda msg: True)
+async def handle_messages(message: types.Message):
+    tickets = load_tickets()
+    user_id = str(message.from_user.id)
+
+    # If client has open ticket
+    if user_id in tickets and tickets[user_id]["open"] and message.from_user.id != config.ADMIN_ID:
+        await bot.send_message(
+            config.ADMIN_ID,
+            f"📩 Message from {message.from_user.username} (ID: {message.from_user.id}):\n\n{message.text}",
+            reply_markup=types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("Reply", callback_data=f"reply:{user_id}")).add(
+                types.InlineKeyboardButton("❌ Close Ticket", callback_data=f"close:{user_id}")
             )
         )
-    )
-    await message.answer("✅ Thank you! Your problem has been reported to the admin.")
-    await state.finish()
+        return
+
+    # If admin is replying to a ticket
+    if message.from_user.id == config.ADMIN_ID:
+        for uid, data in tickets.items():
+            if data["open"]:
+                await bot.send_message(int(uid), f"💬 Admin: {message.text}",
+                                       reply_markup=types.InlineKeyboardMarkup().add(
+                                           types.InlineKeyboardButton("❌ Close Ticket", callback_data=f"close:{uid}")
+                                       ))
+                break
 
 
-# ================= ADMIN REPLY TO PROBLEM =================
-@dp.callback_query_handler(lambda c: c.data.startswith("reply:") and c.from_user.id == config.ADMIN_ID)
-async def start_reply(callback: types.CallbackQuery, state: FSMContext):
+@dp.callback_query_handler(lambda c: c.data.startswith("close:"))
+async def close_ticket(callback: types.CallbackQuery):
     _, user_id = callback.data.split(":")
-    await callback.message.answer("✍️ Please type your reply to the user:")
-    await state.update_data(reply_user_id=int(user_id))
-    await ReplyProblemState.waiting_for_reply.set()
+    tickets = load_tickets()
+    if user_id in tickets:
+        tickets[user_id]["open"] = False
+        save_tickets(tickets)
+        await bot.send_message(int(user_id), "✅ Your ticket has been closed.")
+        await callback.message.answer("✅ Ticket closed.")
     await callback.answer()
 
 
-@dp.message_handler(state=ReplyProblemState.waiting_for_reply, content_types=types.ContentTypes.TEXT)
-async def process_admin_reply(message: types.Message, state: FSMContext):
-    reply_text = message.text
-    data = await state.get_data()
-    user_id = data.get("reply_user_id")
+# -------------------------
+# Flask dummy port for Render
+# -------------------------
+app = Flask(__name__)
 
-    await bot.send_message(user_id, f"💬 Admin replied to your problem:\n\n{reply_text}")
-    await message.answer("✅ Your reply has been sent to the user.")
-    await state.finish()
+@app.route("/")
+def home():
+    return "Bot is running!"
 
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))  # Render sets PORT automatically
+    app.run(host="0.0.0.0", port=port)
 
-# ================= RUN =================
+# -------------------------
+# Run bot and Flask together
+# -------------------------
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+    threading.Thread(target=run_flask).start()
+    asyncio.run(executor.start_polling(dp, skip_updates=True))
