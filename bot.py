@@ -155,9 +155,8 @@ async def handle_buy(callback: types.CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data.startswith("paid:"))
 async def handle_paid(callback: types.CallbackQuery):
     _, user_id, product, option, price = callback.data.split(":")
-    username = callback.from_user.username or "NoUsername"
-    mention = callback.from_user.get_mention()
-    
+    # الحصول على username و mention
+    user_mention = f"@{callback.from_user.username}" if callback.from_user.username else "No username"
     # Update order status
     with open("orders.json", "r+") as f:
         orders = json.load(f)
@@ -213,4 +212,5 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     asyncio.run(executor.start_polling(dp, skip_updates=True))
+
 
