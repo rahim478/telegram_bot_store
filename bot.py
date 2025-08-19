@@ -171,8 +171,8 @@ async def handle_paid(callback: types.CallbackQuery):
         config.ADMIN_ID,
         f"⚠️ Payment confirmation received!\n\n"
         f"User ID: {user_id}\n"
-        f"Username: {username}\n"
-        f"Mention: {mention}\n"
+        f"Username: {callback.from_user.full_name}\n"
+        f"Telegram: {user_mention}\n"
         f"Product: {product} ({option}) - ${price}"
     )
     await callback.message.answer("✅ Thank you! Your payment will be verified.")
@@ -213,3 +213,4 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     asyncio.run(executor.start_polling(dp, skip_updates=True))
+
