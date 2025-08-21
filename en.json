@@ -14,6 +14,6 @@
   "message_sent": "✅ Your message has been sent to the admin.",
   "ticket_closed_user": "✅ Your ticket has been closed by the admin.",
   "admin_reply_header": "💬 **Admin Reply:**\n{text}",
-  "select_language_button": "🌐 Select Language"
+  "select_language_button": "🌐 Select Language",
   "payment_rejected": "We could not verify your payment for the product: {product_name}.\nPlease review the transaction. If you are sure you have paid, please press the '⚠️ Report a Problem' button."
 }
