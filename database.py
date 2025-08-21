@@ -1,8 +1,9 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
+from sqlalchemy.sql import func
 
-# --- تعديل: اقرأ رابط قاعدة البيانات من متغيرات البيئة ---
+# --- اقرأ رابط قاعدة البيانات من متغيرات البيئة ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # إذا كنت تختبر محلياً، يمكنك استخدام رابط SQLite كبديل
@@ -11,11 +12,10 @@ if DATABASE_URL is None:
 
 engine = create_engine(DATABASE_URL)
 
-# باقي الملف يبقى كما هو...
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# (نماذج الجداول Product, ProductOption, Order تبقى كما هي)
+# --- نماذج المنتجات والطلبات (بدون تغيير) ---
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
@@ -39,6 +39,25 @@ class Order(Base):
     option = Column(String)
     price = Column(Float)
     status = Column(String, default="pending")
+
+# --- تعديل: إضافة نماذج التذاكر ---
+class Ticket(Base):
+    __tablename__ = "tickets"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    username = Column(String)
+    is_open = Column(Boolean, default=True)
+    messages = relationship("TicketMessage", back_populates="ticket", cascade="all, delete-orphan")
+
+class TicketMessage(Base):
+    __tablename__ = "ticket_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False)
+    sender = Column(String) # 'user' or 'admin'
+    text = Column(String, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    ticket = relationship("Ticket", back_populates="messages")
+
 
 def create_db():
     Base.metadata.create_all(bind=engine)
