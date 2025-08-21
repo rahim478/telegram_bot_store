@@ -96,10 +96,13 @@ async def show_main_menu(message: types.Message):
     else:
         products = db_session.query(Product).all()
         for product in products:
-            keyboard.add(product.name)
+            keyboard.add(product.name) # أسماء المنتجات لا تترجم
+        # هنا يتم ترجمة زر الإبلاغ عن مشكلة
         keyboard.add(_("report_problem", lang))
     
     keyboard.add(_("select_language_button", lang))
+    
+    # وهنا يتم ترجمة رسالة الترحيب
     await message.answer(_("welcome_back", lang), reply_markup=keyboard)
 
 @dp.message_handler(lambda msg: msg.text in [_("select_language_button", lang) for lang in LANGUAGES.keys()])
@@ -257,8 +260,13 @@ async def reject_payment(callback: types.CallbackQuery):
     if order:
         order.status = "rejected"
         db_session.commit()
+        # نحصل على المستخدم ولغته لإرسال الرسالة المترجمة
         user = get_or_create_user(order.user_id, order.username)
-        await bot.send_message(order.user_id, _("payment_rejected", user.language, product_name=f"{order.product_name} ({order.option})"))
+        product_info = f"{order.product_name} ({order.option})"
+        
+        # نستخدم مفتاح الترجمة الجديد هنا
+        await bot.send_message(order.user_id, _("payment_rejected", user.language, product_name=product_info))
+        
         await callback.message.edit_text(f"❌ Payment for Order #{order.id} has been rejected.")
     else:
         await callback.message.answer("Order not found.")
@@ -270,6 +278,7 @@ async def manage_products(message: types.Message):
 
 
 # ================== TICKETS SYSTEM ==================
+# استخدم هذا الفلتر الجديد الذي يتحقق من النص بجميع اللغات المتاحة
 @dp.message_handler(lambda msg: msg.text in [_("report_problem", lang) for lang in LANGUAGES.keys()])
 async def report_problem(message: types.Message):
     user = get_or_create_user(message.from_user.id, message.from_user.username)
@@ -374,4 +383,5 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
     executor.start_polling(dp, skip_updates=True)
+
 
