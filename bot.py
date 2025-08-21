@@ -81,11 +81,15 @@ async def set_language(callback: types.CallbackQuery):
     db_session.commit()
     
     await callback.message.delete()
-    await show_main_menu(callback.message)
+    # --- التعديل هنا: مررنا كائن المستخدم المحدث مباشرة ---
+    await show_main_menu(callback.message, user=user)
 
-async def show_main_menu(message: types.Message):
+async def show_main_menu(message: types.Message, user=None):
     """عرض القائمة الرئيسية باللغة المناسبة."""
-    user = get_or_create_user(message.from_user.id, message.from_user.username)
+    # --- التعديل هنا: تحقق مما إذا تم تمرير المستخدم ---
+    if user is None:
+        user = get_or_create_user(message.from_user.id, message.from_user.username)
+    
     lang = user.language
     
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -96,13 +100,10 @@ async def show_main_menu(message: types.Message):
     else:
         products = db_session.query(Product).all()
         for product in products:
-            keyboard.add(product.name) # أسماء المنتجات لا تترجم
-        # هنا يتم ترجمة زر الإبلاغ عن مشكلة
+            keyboard.add(product.name)
         keyboard.add(_("report_problem", lang))
     
     keyboard.add(_("select_language_button", lang))
-    
-    # وهنا يتم ترجمة رسالة الترحيب
     await message.answer(_("welcome_back", lang), reply_markup=keyboard)
 
 @dp.message_handler(lambda msg: msg.text in [_("select_language_button", lang) for lang in LANGUAGES.keys()])
@@ -383,5 +384,6 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
     executor.start_polling(dp, skip_updates=True)
+
 
 
