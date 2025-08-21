@@ -127,7 +127,10 @@ async def product_selected(message: types.Message):
 @dp.callback_query_handler(lambda c: c.data.startswith("buy:"))
 async def handle_buy(callback: types.CallbackQuery):
     user = get_or_create_user(callback.from_user.id, callback.from_user.username)
-    _, product_name, option_text, price_str = callback.data.split(":")
+    
+    # --- هذا هو السطر الذي تم تصحيحه ---
+    # لقد قمنا بتغيير `_` إلى `action` لتجنب التعارض
+    action, product_name, option_text, price_str = callback.data.split(":")
     
     new_order = Order(
         user_id=callback.from_user.id,
@@ -149,7 +152,6 @@ async def handle_buy(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
     await callback.answer()
-
 @dp.callback_query_handler(lambda c: c.data.startswith("paid:"))
 async def handle_paid(callback: types.CallbackQuery):
     user = get_or_create_user(callback.from_user.id, callback.from_user.username)
@@ -372,3 +374,4 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
     executor.start_polling(dp, skip_updates=True)
+
