@@ -37,6 +37,7 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 db_session = SessionLocal()
 
+
 # ================= STATES =================
 class SendProductState(StatesGroup):
     waiting_for_details = State()
@@ -384,6 +385,7 @@ if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
     executor.start_polling(dp, skip_updates=True)
+
 
 
 
