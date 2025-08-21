@@ -1,0 +1,18 @@
+{
+  "welcome": "🛒 Welcome! Please choose a language:",
+  "welcome_back": "🛒 Welcome back! Please choose an option:",
+  "choose_option": "Choose duration/option:",
+  "order_placed": "🛒 Order placed!",
+  "payment_prompt": "📦 Product: {product_name} ({option_text}) - ${price_str}\n💳 Please send payment to Binance ID: {binance_id}",
+  "payment_confirmation": "✅ Thank you! Your payment will be verified by the admin shortly.",
+  "report_problem": "⚠️ Report a Problem",
+  "view_orders": "📋 View Orders",
+  "view_tickets": "🎫 View Open Tickets",
+  "manage_products": "📦 Manage Products",
+  "ticket_created": "✍️ Your ticket has been created. Please describe your problem now.",
+  "ticket_exists": "💬 You already have an open ticket. Please continue the conversation there.",
+  "message_sent": "✅ Your message has been sent to the admin.",
+  "ticket_closed_user": "✅ Your ticket has been closed by the admin.",
+  "admin_reply_header": "💬 **Admin Reply:**\n{text}",
+  "select_language_button": "🌐 Select Language"
+}
