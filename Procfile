@@ -1,1 +1,1 @@
-worker: python bot.py
+worker: python database.py && python bot.py
